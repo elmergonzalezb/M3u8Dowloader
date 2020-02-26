@@ -1,12 +1,16 @@
 # _*_ encoding:utf-8 _*_
-
-import re
+from __future__ import print_function,division
 import os
 import gevent
 from queue import Queue
 from Crypto.Cipher import AES
+from Crypto import Random
 from gevent import monkey
 from gevent.pool import Pool
+from urllib import parse
+from posixpath import normpath
+import random
+import re
 import time
 gevent.monkey.patch_all()
 
@@ -16,13 +20,15 @@ from urllib.request import urlretrieve
 headers = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.130 Mobile Safari/537.36",
     "connection": "close",
-    "Origin":"https://hqq.tv",
-    "Referer": "https://hqq.tv/player/embed_player.php?vid=TGVhVW1rUUl4YS9RSHdza0I0NE5TQT09&autoplay=no"
+    "Origin":"https://www.98ssw.space",
+    "Referer": "https://www.98ssw.space/forum.php?mod=viewthread&tid=275314&highlight=%E8%A5%BF%E5%B7%9D%E3%82%86%E3%81%84"
 
 }
 
 DOWNLOAD_UEL = os.getcwd()
 DOWNLOAD_UEL_T = os.getcwd()
+
+KEY_URL_PATTERN = re.compile('(?<=URI=).*')
 
 class M3u8Downloader(object):
 
@@ -70,7 +76,12 @@ class M3u8Downloader(object):
         #  all_content = requests.get(url).text  # 获取M3U8的文件内容
         file_line = all_content.split("\n")  # 读取文件里的每一行
         # 通过判断文件头来确定是否是M3U8文件
-        if 'URI="key.key"' in all_content:#解密
+        if 'URI="key.key"' in all_content or 'key.key' in all_content:#解密
+            # key_uri=KEY_URL_PATTERN.search(all_content).group()
+            # uri=parse.urlsplit(self.url)
+            # base_uri=uri[0]+"://"+uri[1]
+            # key_url=base_uri+key_uri
+            # #key_url=myurljoin(base_uri,key_uri)
             self.parse_decrytor(self.url)
         if file_line[0] != "#EXTM3U":
             raise BaseException(u"非M3U8的链接")
@@ -114,9 +125,13 @@ class M3u8Downloader(object):
 
     def parse_decrytor(self,url):
         filename=os.path.basename(url)
-        key_url=re.sub(filename,"key,key",url)
+        key_url=url.replace(filename,'key.key')
+        #key_url=re.sub(filename,'key.key',url)
         key = requests.get(key_url, headers=headers).text
-        self.cryptor=AES.new(key,AES.MODE_CBC,key)
+        iv=Random.new().read(AES.block_size)
+        #self.cryptor = AES.new(key.encode('utf-8'),AES.MODE_CBC,b'0000000000000000')
+        self.cryptor = AES.new(key.encode('utf-8'), AES.MODE_CBC, iv)
+
         self.haskey=True
 
     def parse_url(self,item):
@@ -179,6 +194,11 @@ class M3u8Downloader(object):
                 break
 
 
+def myurljoin(base,url):
+    url1 = parse.urljoin(base, url)
+    arr = parse.urlparse(url1)
+    path = normpath(arr[2])
+    return parse.urlunparse((arr.scheme, arr.netloc, path, arr.params, arr.query, arr.fragment))
 
 def merge_file(filename):
     path = DOWNLOAD_UEL + r"/download/" + filename.split(".")[0]
@@ -195,11 +215,13 @@ def paseStreaming(url, filename='', server=''):
     filename = os.path.basename(url).replace("m3u8", "").split('.')[0]
     qb = M3u8Downloader(url=url,filename=filename, server=server)
     qb.header=headers
-    qb.concurrent_num=16 #并发数
+    qb.concurrent_num=8 #并发数
     qb.run()
     merge_file(filename)
     print("total cost：", time.time() - t1)
 
 
 if __name__ == '__main__':
-    paseStreaming(url="https://dt53fg.vkcache.com/secip/0/aUKBaxdd4Q9cnfYZX78u5Q/MTQwLjIyNy4xMjYuMTIz/1580202000/hls-vod-s09/flv/api/files/videos/2020/01/07/1578403321op2we.mp4.m3u8")
+    url2="https://www.aeqw.space/mide-176-uncensored/500kb/hls/index.m3u8?sign=0dc9f79417250e23528ad615e24592097cd0032bd22886ca0b5773b3720304be1a0264e641774f02a2bf0c99f078f9e0"
+    #url="https://dt53fg.vkcache.com/secip/0/aUKBaxdd4Q9cnfYZX78u5Q/MTQwLjIyNy4xMjYuMTIz/1580202000/hls-vod-s09/flv/api/files/videos/2020/01/07/1578403321op2we.mp4.m3u8"
+    paseStreaming(url=url2)
